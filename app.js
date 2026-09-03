@@ -29,7 +29,7 @@ const DEFAULT_CATEGORIES = {
 };
 
 // 기존(이전 단계) 사용자의 저장된 카테고리에는 위 소분류 확장분이 없을 수 있으므로,
-// 로드 시 이름이 격치지 않는 것만 안전하게 추가해준다. (사용자가 이미 만든/수정한 항목은 건드리지 않음)
+// 로드 시 이름이 겹치지 않는 것만 안전하게 추가해준다. (사용자가 이미 만든/수정한 항목은 건드리지 않음)
 const NEW_CATEGORY_ADDITIONS = {
   income: [
     { group: "고정수입", name: "용돈" },
@@ -225,7 +225,7 @@ function getSelectableGroups(type, currentGroup) {
   const allNames = all.map((g) => g.group);
   let groups = all.filter((g) => g.subs.some((s) => !s.hidden)).map((g) => g.group);
   // currentGroup은 그 유형에 실제로 존재하는 그룹일 때만 주입한다.
-  // (유형/그룹 전환 도중 남아있는 이전 선택값이 엉눵한 그룹으로 새어 들어가는 것을 방지)
+  // (유형/그룹 전환 도중 남아있는 이전 선택값이 엉뚱한 그룹으로 새어 들어가는 것을 방지)
   if (currentGroup && allNames.includes(currentGroup) && !groups.includes(currentGroup)) {
     groups.push(currentGroup);
   }
@@ -366,7 +366,7 @@ const el = {
 /* ---------------- Category picker (거래 모달 / 반복 모달 공용) ---------------- */
 
 function createCategoryPicker({ groupSelect, categorySelect, typeButtons, getType, setType }) {
-  // desiredGroup/desiredCategory가 주어지지 않으면(=사용자가 직접 유형/그룹을 바꾸 경우)
+  // desiredGroup/desiredCategory가 주어지지 않으면(=사용자가 직접 유형/그룹을 바꾼 경우)
   // 항상 해당 그룹의 첫 번째 항목으로 리셋한다. 이전 선택값이 새 그룹으로 새어 들어가는 것을 막기 위함.
   function populateGroups(desiredGroup) {
     const type = getType();
