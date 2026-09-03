@@ -10,6 +10,27 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   </head>
   <body>
+    <div id="authScreen" class="loading-overlay" hidden>
+      <div class="auth-box">
+        <h2 class="auth-title">가계부</h2>
+        <p class="auth-sub">로그인하고 나만의 거래 내역을 관리하세요.</p>
+        <form id="authForm" novalidate>
+          <label class="field">
+            <span class="field-label">이메일</span>
+            <input type="email" id="authEmail" required autocomplete="email" />
+          </label>
+          <label class="field">
+            <span class="field-label">비밀번호</span>
+            <input type="password" id="authPassword" required minlength="6" autocomplete="current-password" />
+          </label>
+          <p id="authError" class="form-error" hidden></p>
+          <p id="authNotice" class="auth-notice" hidden></p>
+          <button type="submit" id="authSubmitBtn" class="btn-primary btn-block">로그인</button>
+        </form>
+        <button type="button" id="authToggleModeBtn" class="link-btn">계정이 없으신가요? 회원가입</button>
+      </div>
+    </div>
+
     <div id="loadingOverlay" class="loading-overlay">
       <p>가계부를 불러오는 중이에요…</p>
     </div>
@@ -144,6 +165,12 @@
 
         <!-- ===== 설정 탭 ===== -->
         <div id="settingsTab" hidden>
+          <section class="settings-section">
+            <div class="section-header"><h2>계정</h2></div>
+            <p class="manage-row-sub" id="accountEmail"></p>
+            <button type="button" id="logoutBtn" class="btn-secondary account-logout-btn">로그아웃</button>
+          </section>
+
           <section class="settings-section">
             <div class="section-header"><h2>사용자 관리</h2></div>
             <ul id="memberManageList" class="manage-list"></ul>
