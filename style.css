@@ -920,6 +920,43 @@ button {
   z-index: 300;
 }
 
+/* ---------- Auth ---------- */
+.auth-box {
+  width: 100%;
+  max-width: 320px;
+  text-align: left;
+}
+
+.auth-title {
+  font-size: 22px;
+  font-weight: 800;
+  margin: 0 0 4px;
+  text-align: center;
+  color: var(--navy);
+}
+
+.auth-sub {
+  font-size: 14px;
+  color: var(--gray-500);
+  text-align: center;
+  margin: 0 0 20px;
+}
+
+.auth-notice {
+  color: var(--blue-dark);
+  font-size: 13px;
+  margin: -4px 0 12px;
+}
+
+#authToggleModeBtn {
+  display: block;
+  margin: 12px auto 0;
+}
+
+.account-logout-btn {
+  margin-top: 10px;
+}
+
 /* ---------- Toast ---------- */
 .toast {
   position: fixed;
