@@ -1,15 +1,133 @@
 "use strict";
 
 /* =========================================================
-   가계부 앱 - 2단계 (예산 / 반복 거래 / 사용자·카테고리 관리 / 검색·필터)
-   순수 HTML/CSS/JS, localStorage 저장
+   가계부 앱 - 3단계 (Supabase 연동)
+   거래(수입/지출)는 Supabase의 income_expense_lists 테이블에 저장하고,
+   사용자·카테고리·예산·반복 규칙은 그대로 localStorage에 저장한다.
+   순수 HTML/CSS/JS, 별도 빌드 도구 없음.
    ========================================================= */
 
-const STORAGE_KEY = "household-budget:transactions"; // 1단계와 동일한 키 유지 (기존 데이터 보존)
 const MEMBERS_KEY = "household-budget:members";
 const CATEGORIES_KEY = "household-budget:categories";
 const BUDGETS_KEY = "household-budget:budgets";
 const RECURRING_KEY = "household-budget:recurring";
+const OWNER_KEY_STORAGE = "household-budget:ownerKey"; // 브라우저별 무작위 식별자 (로그인 대체)
+
+// ---------------- Supabase (거래 데이터 저장소) ----------------
+// 이 앱은 로그인을 쓰지 않는다. 대신 브라우저에 무작위 owner_key를 만들어 저장해두고,
+// 모든 거래에 이 키를 함께 저장·조회한다. anon key는 클라이언트 코드에 그대로 노출되므로
+// (레포가 공개될 수 있음), RLS는 anon 접근을 허용해두되 앱이 항상 owner_key로 걸러서 쓴다.
+// → 이 키를 아는 사람만 접근 가능하다는 "추측 불가능성"에 의존하는 방식이며, 완전한 보안은 아니다.
+const SUPABASE_URL = "https://ghvihwgrajodvzabqlcz.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_SdvVKgWzBJCdxM17yn_PMw_6qlmhM0K";
+const TRANSACTIONS_TABLE = "income_expense_lists";
+
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+function getOwnerKey() {
+  let key = localStorage.getItem(OWNER_KEY_STORAGE);
+  if (!key) {
+    key = window.crypto && window.crypto.randomUUID ? window.crypto.randomUUID() : `${uid()}-${uid()}-${uid()}`;
+    localStorage.setItem(OWNER_KEY_STORAGE, key);
+  }
+  return key;
+}
+
+// DB 행(snake_case) ↔ 앱 내부에서 쓰는 거래 객체 형태 변환
+function rowToTransaction(row) {
+  return {
+    id: row.id,
+    type: row.type,
+    amount: row.amount,
+    date: row.occurred_on,
+    member: row.member,
+    group: row.category_group,
+    category: row.category,
+    content: row.content || "",
+    memo: row.memo || "",
+    status: row.status,
+    recurringId: row.recurring_id || undefined,
+    occurrenceMonth: row.occurrence_month || undefined,
+    createdAt: row.created_at ? new Date(row.created_at).getTime() : Date.now(),
+  };
+}
+
+function transactionToRow(t) {
+  return {
+    owner_key: getOwnerKey(),
+    type: t.type,
+    amount: t.amount,
+    occurred_on: t.date,
+    member: t.member,
+    category_group: t.group,
+    category: t.category,
+    content: t.content || "",
+    memo: t.memo || "",
+    status: t.status || "completed",
+    recurring_id: t.recurringId || null,
+    occurrence_month: t.occurrenceMonth || null,
+  };
+}
+
+async function loadTransactionsFromDB() {
+  const { data, error } = await supabaseClient
+    .from(TRANSACTIONS_TABLE)
+    .select("*")
+    .eq("owner_key", getOwnerKey());
+  if (error) throw error;
+  return (data || []).map(rowToTransaction);
+}
+
+async function insertTransactionRow(payload) {
+  const { data, error } = await supabaseClient
+    .from(TRANSACTIONS_TABLE)
+    .insert(transactionToRow(payload))
+    .select()
+    .single();
+  if (error) throw error;
+  return rowToTransaction(data);
+}
+
+async function updateTransactionRow(id, payload) {
+  const { data, error } = await supabaseClient
+    .from(TRANSACTIONS_TABLE)
+    .update(transactionToRow(payload))
+    .eq("id", id)
+    .eq("owner_key", getOwnerKey())
+    .select()
+    .single();
+  if (error) throw error;
+  return rowToTransaction(data);
+}
+
+async function deleteTransactionRow(id) {
+  const { error } = await supabaseClient
+    .from(TRANSACTIONS_TABLE)
+    .delete()
+    .eq("id", id)
+    .eq("owner_key", getOwnerKey());
+  if (error) throw error;
+}
+
+async function insertTransactionRowsBatch(payloads) {
+  if (payloads.length === 0) return [];
+  const { data, error } = await supabaseClient
+    .from(TRANSACTIONS_TABLE)
+    .insert(payloads.map(transactionToRow))
+    .select();
+  if (error) throw error;
+  return (data || []).map(rowToTransaction);
+}
+
+// 사용자/소분류 이름 변경 시, 이미 저장된 거래들의 해당 필드를 일괄 수정한다.
+async function bulkRenameTransactionField(column, oldValue, newValue) {
+  const { error } = await supabaseClient
+    .from(TRANSACTIONS_TABLE)
+    .update({ [column]: newValue })
+    .eq("owner_key", getOwnerKey())
+    .eq(column, oldValue);
+  if (error) throw error;
+}
 
 const DEFAULT_MEMBERS = ["본인", "가족", "공용"];
 
@@ -101,14 +219,6 @@ function saveJSON(key, value, failMessage) {
     console.error(`${key} 데이터를 저장하지 못했습니다.`, err);
     showToast(failMessage || "저장에 실패했어요. 브라우저 저장 공간을 확인해 주세요.");
   }
-}
-
-function loadTransactions() {
-  const parsed = loadJSON(STORAGE_KEY, []);
-  return Array.isArray(parsed) ? parsed : [];
-}
-function saveTransactions() {
-  saveJSON(STORAGE_KEY, state.transactions);
 }
 
 function loadMembers() {
@@ -260,6 +370,11 @@ function getVisibleExpenseCategoryNames() {
 /* ---------------- DOM refs ---------------- */
 
 const el = {
+  app: document.getElementById("app"),
+  loadingOverlay: document.getElementById("loadingOverlay"),
+  errorOverlay: document.getElementById("errorOverlay"),
+  retryLoadBtn: document.getElementById("retryLoadBtn"),
+
   monthLabel: document.getElementById("monthLabel"),
   prevMonth: document.getElementById("prevMonth"),
   nextMonth: document.getElementById("nextMonth"),
@@ -472,9 +587,8 @@ function clampDayInMonth(monthKey, day) {
   return Math.min(day, lastDay);
 }
 
-function generateRecurringOccurrences() {
-  let txChanged = false;
-  let ruleChanged = false;
+async function generateRecurringOccurrences() {
+  const pending = []; // { rule, month, payload }
 
   for (const rule of state.recurringRules) {
     if (!Array.isArray(rule.generatedMonths)) rule.generatedMonths = [];
@@ -482,29 +596,35 @@ function generateRecurringOccurrences() {
     for (const m of months) {
       if (rule.generatedMonths.includes(m)) continue; // 이미 생성된 달 → 중복 생성 방지
       const day = clampDayInMonth(m, rule.dayOfMonth);
-      state.transactions.push({
-        id: uid(),
-        type: rule.type,
-        amount: rule.amount,
-        date: `${m}-${pad2(day)}`,
-        member: rule.member,
-        group: rule.group,
-        category: rule.category,
-        content: rule.content || "",
-        memo: rule.memo || "",
-        status: "completed",
-        recurringId: rule.id,
-        occurrenceMonth: m,
-        createdAt: Date.now(),
+      pending.push({
+        rule,
+        month: m,
+        payload: {
+          type: rule.type,
+          amount: rule.amount,
+          date: `${m}-${pad2(day)}`,
+          member: rule.member,
+          group: rule.group,
+          category: rule.category,
+          content: rule.content || "",
+          memo: rule.memo || "",
+          status: "completed",
+          recurringId: rule.id,
+          occurrenceMonth: m,
+        },
       });
-      rule.generatedMonths.push(m);
-      txChanged = true;
-      ruleChanged = true;
     }
   }
 
-  if (txChanged) saveTransactions();
-  if (ruleChanged) saveRecurringRules();
+  if (pending.length === 0) return;
+
+  const inserted = await insertTransactionRowsBatch(pending.map((p) => p.payload));
+  // Supabase는 여러 행을 한 번에 insert하면 입력 순서대로 결과를 돌려준다.
+  inserted.forEach((row, i) => {
+    state.transactions.push(row);
+    pending[i].rule.generatedMonths.push(pending[i].month);
+  });
+  saveRecurringRules();
 }
 
 /* ---------------- Rendering: 공통 ---------------- */
@@ -1058,7 +1178,7 @@ function handleAddMember() {
   render();
 }
 
-function handleRenameMember(m) {
+async function handleRenameMember(m) {
   const next = prompt("사용자 이름 수정", m.name);
   if (next === null) return;
   const name = next.trim();
@@ -1071,6 +1191,13 @@ function handleRenameMember(m) {
   if (name === m.name) return;
 
   const oldName = m.name;
+  try {
+    await bulkRenameTransactionField("member", oldName, name);
+  } catch (err) {
+    console.error(err);
+    showToast("거래 데이터 수정에 실패했어요. 네트워크 상태를 확인해 주세요.");
+    return;
+  }
   m.name = name;
   for (const t of state.transactions) {
     if (t.member === oldName) t.member = name;
@@ -1079,7 +1206,6 @@ function handleRenameMember(m) {
     if (r.member === oldName) r.member = name;
   }
   saveMembers();
-  saveTransactions();
   saveRecurringRules();
   showToast("사용자 이름을 수정했어요.");
   render();
@@ -1156,7 +1282,7 @@ function handleAddSub(type, group) {
   render();
 }
 
-function handleRenameSub(type, group, sub) {
+async function handleRenameSub(type, group, sub) {
   const input = prompt("소분류 이름 수정", sub.name);
   if (input === null) return;
   const name = input.trim();
@@ -1168,6 +1294,13 @@ function handleRenameSub(type, group, sub) {
   if (name === sub.name) return;
 
   const oldName = sub.name;
+  try {
+    await bulkRenameTransactionField("category", oldName, name);
+  } catch (err) {
+    console.error(err);
+    showToast("거래 데이터 수정에 실패했어요. 네트워크 상태를 확인해 주세요.");
+    return;
+  }
   sub.name = name;
   for (const t of state.transactions) {
     if (t.type === type && t.group === group.group && t.category === oldName) t.category = name;
@@ -1182,7 +1315,6 @@ function handleRenameSub(type, group, sub) {
     saveBudgets();
   }
   saveCategories();
-  saveTransactions();
   saveRecurringRules();
   showToast("소분류 이름을 수정했어요.");
   render();
@@ -1276,7 +1408,7 @@ function validateForm() {
   return null;
 }
 
-function handleSubmit(e) {
+async function handleSubmit(e) {
   e.preventDefault();
 
   const error = validateForm();
@@ -1300,30 +1432,46 @@ function handleSubmit(e) {
     status: "completed",
   };
 
-  if (state.editingId) {
-    const idx = state.transactions.findIndex((x) => x.id === state.editingId);
-    if (idx !== -1) state.transactions[idx] = { ...state.transactions[idx], ...payload };
-    showToast("거래를 수정했어요.");
-  } else {
-    state.transactions.push({ id: uid(), createdAt: Date.now(), ...payload });
-    showToast("거래를 추가했어요.");
+  try {
+    if (state.editingId) {
+      const updated = await updateTransactionRow(state.editingId, payload);
+      const idx = state.transactions.findIndex((x) => x.id === state.editingId);
+      if (idx !== -1) state.transactions[idx] = updated;
+      showToast("거래를 수정했어요.");
+    } else {
+      const inserted = await insertTransactionRow(payload);
+      state.transactions.push(inserted);
+      showToast("거래를 추가했어요.");
+    }
+    closeModal();
+    render();
+  } catch (err) {
+    console.error(err);
+    el.formError.textContent = "저장에 실패했어요. 네트워크 상태를 확인해 주세요.";
+    el.formError.hidden = false;
+  } finally {
+    el.submitBtn.disabled = false;
   }
-
-  saveTransactions();
-  el.submitBtn.disabled = false;
-  closeModal();
-  render();
 }
 
-function handleDelete() {
+async function handleDelete() {
   if (!state.editingId) return;
   const ok = confirm("이 거래를 삭제할까요?");
   if (!ok) return;
-  state.transactions = state.transactions.filter((x) => x.id !== state.editingId);
-  saveTransactions();
-  showToast("거래를 삭제했어요.");
-  closeModal();
-  render();
+  const targetId = state.editingId;
+  el.deleteBtn.disabled = true;
+  try {
+    await deleteTransactionRow(targetId);
+    state.transactions = state.transactions.filter((x) => x.id !== targetId);
+    showToast("거래를 삭제했어요.");
+    closeModal();
+    render();
+  } catch (err) {
+    console.error(err);
+    showToast("삭제에 실패했어요. 네트워크 상태를 확인해 주세요.");
+  } finally {
+    el.deleteBtn.disabled = false;
+  }
 }
 
 /* ---------------- 반복 거래 모달 ---------------- */
@@ -1365,7 +1513,7 @@ function validateRecurringForm() {
   return null;
 }
 
-function handleRecurringSubmit(e) {
+async function handleRecurringSubmit(e) {
   e.preventDefault();
   const error = validateRecurringForm();
   if (error) {
@@ -1376,7 +1524,7 @@ function handleRecurringSubmit(e) {
   el.recurringFormError.hidden = true;
   el.recurringSubmitBtn.disabled = true;
 
-  state.recurringRules.push({
+  const rule = {
     id: uid(),
     type: state.recurringType,
     amount: Number(el.recurringAmountInput.value),
@@ -1390,14 +1538,25 @@ function handleRecurringSubmit(e) {
     memo: el.recurringMemoInput.value.trim(),
     generatedMonths: [],
     createdAt: Date.now(),
-  });
+  };
+  state.recurringRules.push(rule);
   saveRecurringRules();
-  generateRecurringOccurrences();
 
-  showToast("반복 거래를 등록하고 각 달 거래를 생성했어요.");
-  el.recurringSubmitBtn.disabled = false;
-  closeRecurringModal();
-  render();
+  try {
+    await generateRecurringOccurrences();
+    showToast("반복 거래를 등록하고 각 달 거래를 생성했어요.");
+    closeRecurringModal();
+    render();
+  } catch (err) {
+    console.error(err);
+    // 규칙 자체는 이미 저장됐으므로 되돌리지 않고, 거래 생성만 실패했음을 알린다.
+    // (다음에 앱을 열면 초기화 시 자동으로 이어서 생성을 시도한다.)
+    showToast("반복 규칙은 저장했지만 거래 생성 중 오류가 발생했어요. 다시 열면 이어서 시도해요.");
+    closeRecurringModal();
+    render();
+  } finally {
+    el.recurringSubmitBtn.disabled = false;
+  }
 }
 
 /* ---------------- Toast ---------------- */
@@ -1504,8 +1663,7 @@ function bindEvents() {
 
 /* ---------------- Init ---------------- */
 
-function init() {
-  state.transactions = loadTransactions();
+async function init() {
   state.members = loadMembers();
   state.categories = loadCategories();
   state.budgets = loadBudgets();
@@ -1513,13 +1671,30 @@ function init() {
 
   state.currentDate = new Date(state.currentDate.getFullYear(), state.currentDate.getMonth(), 1);
 
-  generateRecurringOccurrences();
-
   transactionPicker.populateGroups();
   recurringPicker.populateGroups();
-
   bindEvents();
-  render();
+  el.retryLoadBtn.addEventListener("click", loadAndRender);
+
+  await loadAndRender();
+}
+
+// 거래 데이터를 Supabase에서 불러와 화면을 그린다. 최초 로드와 "다시 시도" 버튼에서 공용으로 쓴다.
+async function loadAndRender() {
+  el.loadingOverlay.hidden = false;
+  el.errorOverlay.hidden = true;
+  el.app.hidden = true;
+  try {
+    state.transactions = await loadTransactionsFromDB();
+    await generateRecurringOccurrences();
+    el.app.hidden = false;
+    el.loadingOverlay.hidden = true;
+    render();
+  } catch (err) {
+    console.error(err);
+    el.loadingOverlay.hidden = true;
+    el.errorOverlay.hidden = false;
+  }
 }
 
 init();
