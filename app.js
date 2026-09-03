@@ -1,9 +1,10 @@
 "use strict";
 
 /* =========================================================
-   가계부 앱 - 3단계 (Supabase 연동)
-   거래(수입/지출)는 Supabase의 income_expense_lists 테이블에 저장하고,
-   사용자·카테고리·예산·반복 규칙은 그대로 localStorage에 저장한다.
+   가계부 앱 - 4단계 (Supabase 로그인 연동)
+   Supabase Auth(이메일/비밀번호) 로그인을 도입해, 거래(수입/지출)는
+   income_expense_lists 테이블에 계정(auth.uid())별로 완전히 분리되어 저장된다.
+   사용자·카테고리·예산·반복 규칙은 그대로 localStorage에 저장한다(브라우저 공용).
    순수 HTML/CSS/JS, 별도 빌드 도구 없음.
    ========================================================= */
 
@@ -11,19 +12,25 @@ const MEMBERS_KEY = "household-budget:members";
 const CATEGORIES_KEY = "household-budget:categories";
 const BUDGETS_KEY = "household-budget:budgets";
 const RECURRING_KEY = "household-budget:recurring";
-const OWNER_KEY_STORAGE = "household-budget:ownerKey"; // 브라우저별 무작위 식별자 (로그인 대체)
+const OWNER_KEY_STORAGE = "household-budget:ownerKey"; // 로그인 이전 단계에서 쓰던 브라우저별 식별자 (마이그레이션용)
 
-// ---------------- Supabase (거래 데이터 저장소) ----------------
-// 이 앱은 로그인을 쓰지 않는다. 대신 브라우저에 무작위 owner_key를 만들어 저장해두고,
-// 모든 거래에 이 키를 함께 저장·조회한다. anon key는 클라이언트 코드에 그대로 노출되므로
-// (레포가 공개될 수 있음), RLS는 anon 접근을 허용해두되 앱이 항상 owner_key로 걸러서 쓴다.
-// → 이 키를 아는 사람만 접근 가능하다는 "추측 불가능성"에 의존하는 방식이며, 완전한 보안은 아니다.
+let currentUser = null; // 로그인한 Supabase Auth 사용자 (없으면 null)
+let authMode = "signin"; // 로그인 화면의 현재 모드: 'signin' | 'signup'
+
+// ---------------- Supabase (거래 데이터 저장소 + 로그인) ----------------
+// 거래는 Supabase Auth로 로그인한 계정(auth.uid())에 귀속되어, 계정마다 완전히 분리된
+// 데이터를 본다(다른 기기·브라우저에서 같은 계정으로 로그인해도 동일한 데이터를 본다).
+// anon/publishable key는 클라이언트 코드에 그대로 노출되지만(정적 사이트 특성상 불가피),
+// RLS가 "로그인한 본인(auth.uid() = user_id) 행만" 접근을 허용하므로 안전하다.
 const SUPABASE_URL = "https://ghvihwgrajodvzabqlcz.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_SdvVKgWzBJCdxM17yn_PMw_6qlmhM0K";
 const TRANSACTIONS_TABLE = "income_expense_lists";
 
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+// 로그인 없이 쓰던 이전 단계에서 브라우저별로 발급했던 식별자.
+// 지금은 조회/저장에는 쓰이지 않고, 최초 로그인 시 그 브라우저에 남아있던 옛 거래를
+// 새 계정으로 옮겨오는 1회성 마이그레이션(claimLegacyTransactions)에만 사용된다.
 function getOwnerKey() {
   let key = localStorage.getItem(OWNER_KEY_STORAGE);
   if (!key) {
@@ -54,7 +61,8 @@ function rowToTransaction(row) {
 
 function transactionToRow(t) {
   return {
-    owner_key: getOwnerKey(),
+    user_id: currentUser ? currentUser.id : null,
+    owner_key: getOwnerKey(), // 과거 호환/기록용. 조회·권한 판단에는 더 이상 쓰이지 않는다.
     type: t.type,
     amount: t.amount,
     occurred_on: t.date,
@@ -73,7 +81,7 @@ async function loadTransactionsFromDB() {
   const { data, error } = await supabaseClient
     .from(TRANSACTIONS_TABLE)
     .select("*")
-    .eq("owner_key", getOwnerKey());
+    .eq("user_id", currentUser.id);
   if (error) throw error;
   return (data || []).map(rowToTransaction);
 }
@@ -93,7 +101,7 @@ async function updateTransactionRow(id, payload) {
     .from(TRANSACTIONS_TABLE)
     .update(transactionToRow(payload))
     .eq("id", id)
-    .eq("owner_key", getOwnerKey())
+    .eq("user_id", currentUser.id)
     .select()
     .single();
   if (error) throw error;
@@ -105,7 +113,7 @@ async function deleteTransactionRow(id) {
     .from(TRANSACTIONS_TABLE)
     .delete()
     .eq("id", id)
-    .eq("owner_key", getOwnerKey());
+    .eq("user_id", currentUser.id);
   if (error) throw error;
 }
 
@@ -124,9 +132,29 @@ async function bulkRenameTransactionField(column, oldValue, newValue) {
   const { error } = await supabaseClient
     .from(TRANSACTIONS_TABLE)
     .update({ [column]: newValue })
-    .eq("owner_key", getOwnerKey())
+    .eq("user_id", currentUser.id)
     .eq(column, oldValue);
   if (error) throw error;
+}
+
+// 로그인 없이 쓰던 이전 단계에서 이 브라우저에 남아있던 거래(owner_key 기반, 아직
+// 어떤 계정에도 연결되지 않은 행)를, 로그인 직후 현재 계정 소유로 가져온다.
+// Postgres 함수(SECURITY DEFINER) 쪽에서 auth.uid()로 로그인 여부를 다시 확인하므로 안전하다.
+async function claimLegacyTransactions() {
+  const ownerKey = localStorage.getItem(OWNER_KEY_STORAGE);
+  if (!ownerKey) return;
+  try {
+    const { data, error } = await supabaseClient.rpc("claim_transactions_by_owner_key", {
+      p_owner_key: ownerKey,
+    });
+    if (error) throw error;
+    if (typeof data === "number" && data > 0) {
+      showToast(`이 브라우저에 저장돼 있던 거래 ${data}건을 계정으로 가져왔어요.`);
+    }
+  } catch (err) {
+    console.error(err);
+    // 마이그레이션 실패는 치명적이지 않다 — 다음에 로그인할 때 다시 시도된다.
+  }
 }
 
 const DEFAULT_MEMBERS = ["본인", "가족", "공용"];
@@ -374,6 +402,18 @@ const el = {
   loadingOverlay: document.getElementById("loadingOverlay"),
   errorOverlay: document.getElementById("errorOverlay"),
   retryLoadBtn: document.getElementById("retryLoadBtn"),
+
+  // 로그인
+  authScreen: document.getElementById("authScreen"),
+  authForm: document.getElementById("authForm"),
+  authEmail: document.getElementById("authEmail"),
+  authPassword: document.getElementById("authPassword"),
+  authError: document.getElementById("authError"),
+  authNotice: document.getElementById("authNotice"),
+  authSubmitBtn: document.getElementById("authSubmitBtn"),
+  authToggleModeBtn: document.getElementById("authToggleModeBtn"),
+  accountEmail: document.getElementById("accountEmail"),
+  logoutBtn: document.getElementById("logoutBtn"),
 
   monthLabel: document.getElementById("monthLabel"),
   prevMonth: document.getElementById("prevMonth"),
@@ -1661,6 +1701,94 @@ function bindEvents() {
   });
 }
 
+/* ---------------- 인증 (로그인/회원가입) ---------------- */
+
+function setAuthMode(mode) {
+  authMode = mode;
+  el.authSubmitBtn.textContent = mode === "signin" ? "로그인" : "회원가입";
+  el.authToggleModeBtn.textContent =
+    mode === "signin" ? "계정이 없으신가요? 회원가입" : "이미 계정이 있으신가요? 로그인";
+  el.authError.hidden = true;
+  el.authNotice.hidden = true;
+}
+
+function translateAuthError(err) {
+  const msg = (err && err.message) || "";
+  if (msg.includes("Invalid login credentials")) return "이메일 또는 비밀번호가 올바르지 않아요.";
+  if (msg.includes("already registered")) return "이미 가입된 이메일이에요. 로그인해 주세요.";
+  if (msg.includes("Password should be at least")) return "비밀번호는 6자 이상으로 입력해 주세요.";
+  if (msg.includes("Unable to validate email")) return "올바른 이메일 형식이 아니에요.";
+  return "요청 처리 중 문제가 발생했어요. 잠시 후 다시 시도해 주세요.";
+}
+
+async function handleAuthSubmit(e) {
+  e.preventDefault();
+  const email = el.authEmail.value.trim();
+  const password = el.authPassword.value;
+  if (!email || !password) return;
+
+  el.authError.hidden = true;
+  el.authNotice.hidden = true;
+  el.authSubmitBtn.disabled = true;
+
+  try {
+    if (authMode === "signin") {
+      const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+      // 성공하면 onAuthStateChange가 화면 전환을 처리한다.
+    } else {
+      const { data, error } = await supabaseClient.auth.signUp({ email, password });
+      if (error) throw error;
+      if (!data.session) {
+        // 이메일 확인이 켜져 있는 프로젝트라면 가입 직후 바로 로그인되지 않는다.
+        // setAuthMode가 안내 문구를 초기화하므로, 모드 전환 후에 문구를 설정한다.
+        setAuthMode("signin");
+        el.authNotice.textContent = "가입 확인 이메일을 보냈어요. 메일함을 확인한 뒤 로그인해 주세요.";
+        el.authNotice.hidden = false;
+      }
+    }
+  } catch (err) {
+    console.error(err);
+    el.authError.textContent = translateAuthError(err);
+    el.authError.hidden = false;
+  } finally {
+    el.authSubmitBtn.disabled = false;
+  }
+}
+
+async function handleLogout() {
+  const ok = confirm("로그아웃할까요?");
+  if (!ok) return;
+  await supabaseClient.auth.signOut();
+  // 이후 처리는 onAuthStateChange가 담당한다.
+}
+
+// 로그인 상태가 바뀔 때마다(최초 구독 시 현재 상태 포함) 호출된다.
+// 같은 사용자에 대한 중복 이벤트(TOKEN_REFRESHED 등)는 무시해 데이터를 다시 불러오지 않는다.
+let handledUserId = undefined; // undefined: 아직 한 번도 처리 안 됨
+async function handleAuthChange(session) {
+  const user = session && session.user ? session.user : null;
+  const userId = user ? user.id : null;
+  if (userId === handledUserId) return;
+  handledUserId = userId;
+  currentUser = user;
+
+  if (user) {
+    el.authScreen.hidden = true;
+    el.accountEmail.textContent = `로그인 계정: ${user.email || ""}`;
+    await claimLegacyTransactions();
+    await loadAndRender();
+  } else {
+    state.transactions = [];
+    el.app.hidden = true;
+    el.loadingOverlay.hidden = true;
+    el.errorOverlay.hidden = true;
+    el.authForm.reset();
+    setAuthMode("signin");
+    el.authScreen.hidden = false;
+  }
+}
+
 /* ---------------- Init ---------------- */
 
 async function init() {
@@ -1675,11 +1803,16 @@ async function init() {
   recurringPicker.populateGroups();
   bindEvents();
   el.retryLoadBtn.addEventListener("click", loadAndRender);
+  el.authForm.addEventListener("submit", handleAuthSubmit);
+  el.authToggleModeBtn.addEventListener("click", () => setAuthMode(authMode === "signin" ? "signup" : "signin"));
+  el.logoutBtn.addEventListener("click", handleLogout);
 
-  await loadAndRender();
+  supabaseClient.auth.onAuthStateChange((_event, session) => {
+    handleAuthChange(session);
+  });
 }
 
-// 거래 데이터를 Supabase에서 불러와 화면을 그린다. 최초 로드와 "다시 시도" 버튼에서 공용으로 쓴다.
+// 거래 데이터를 Supabase에서 불러와 화면을 그린다. 로그인 직후와 "다시 시도" 버튼에서 공용으로 쓴다.
 async function loadAndRender() {
   el.loadingOverlay.hidden = false;
   el.errorOverlay.hidden = true;
