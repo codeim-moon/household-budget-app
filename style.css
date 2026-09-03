@@ -1,0 +1,920 @@
+/* ===== 토스를 더 미니말하게 해석한 가계부 디자인 ===== */
+
+:root {
+  --blue: #3182f6;
+  --blue-dark: #1b64da;
+  --blue-tint: #eef4ff;
+  --navy: #191f28;
+  --gray-700: #4e5968;
+  --gray-500: #8b95a1;
+  --gray-200: #e5e8eb;
+  --gray-100: #f2f4f6;
+  --white: #ffffff;
+  --red: #f04452;
+  --radius-lg: 20px;
+  --radius-md: 16px;
+  --radius-sm: 12px;
+  --shadow-card: 0 2px 8px rgba(25, 31, 40, 0.06);
+  --shadow-modal: 0 -4px 24px rgba(25, 31, 40, 0.12);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR",
+    "Segoe UI", Roboto, sans-serif;
+  background: var(--gray-100);
+  color: var(--navy);
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+}
+
+button {
+  font-family: inherit;
+}
+
+#app {
+  max-width: 480px;
+  margin: 0 auto;
+  height: 100vh;
+  background: var(--white);
+  position: relative;
+  box-shadow: var(--shadow-card);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+@media (min-width: 768px) {
+  #app {
+    margin-top: 32px;
+    margin-bottom: 32px;
+    height: calc(100vh - 64px);
+    border-radius: var(--radius-lg);
+  }
+}
+
+.app-header,
+.month-nav,
+.tab-bar {
+  flex: 0 0 auto;
+}
+
+/* ---------- Header ---------- */
+.app-header {
+  padding: 20px 20px 8px;
+}
+
+.app-header h1 {
+  font-size: 20px;
+  font-weight: 700;
+  margin: 0;
+  color: var(--navy);
+}
+
+.container {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 8px 20px 24px;
+  /* FAB(56px, bottom 28px)을 위한 전용 여백. 스크롤 콘텐츠 박스 자체를 이만큼 일찍 끝나게 만들어
+     목록 길이와 무관하게(짧아도, 길어도) 마지막 항목이 FAB와 절대 격치지 않도록 한다. */
+  margin-bottom: 84px;
+}
+
+/* ---------- Tab Bar ---------- */
+.tab-bar {
+  display: flex;
+  gap: 4px;
+  padding: 0 20px 8px;
+  border-bottom: 1px solid var(--gray-100);
+}
+
+.tab-btn {
+  flex: 1;
+  min-height: 44px;
+  border: none;
+  background: transparent;
+  color: var(--gray-500);
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+
+.tab-btn.active {
+  color: var(--blue-dark);
+  border-bottom-color: var(--blue);
+}
+
+/* ---------- Month Nav ---------- */
+.month-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 4px 20px 8px;
+}
+
+.month-label {
+  font-size: 17px;
+  font-weight: 700;
+  min-width: 120px;
+  text-align: center;
+}
+
+.icon-btn {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  border: none;
+  background: transparent;
+  color: var(--gray-700);
+  font-size: 20px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon-btn:hover {
+  background: var(--gray-100);
+}
+
+/* ---------- Member Filter ---------- */
+.member-filter {
+  display: flex;
+  gap: 8px;
+  padding: 8px 0 16px;
+  overflow-x: auto;
+}
+
+.member-chip {
+  flex: 0 0 auto;
+  padding: 10px 16px;
+  min-height: 40px;
+  border-radius: 999px;
+  border: 1px solid var(--gray-200);
+  background: var(--white);
+  color: var(--gray-700);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.member-chip.active {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: var(--white);
+}
+
+/* ---------- Extra Filters ---------- */
+.extra-filters {
+  margin-bottom: 16px;
+}
+
+.search-input {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--gray-200);
+  background: var(--white);
+  color: var(--navy);
+  font-size: 15px;
+  font-family: inherit;
+  margin-bottom: 8px;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: var(--blue);
+}
+
+.filter-row {
+  display: flex;
+  gap: 8px;
+}
+
+.filter-row select {
+  flex: 1;
+  min-width: 0;
+  min-height: 40px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--gray-200);
+  background: var(--white);
+  color: var(--navy);
+  font-size: 13px;
+  font-family: inherit;
+}
+
+.filter-summary {
+  margin: 10px 2px 0;
+  font-size: 13px;
+  color: var(--gray-700);
+}
+
+/* ---------- Buttons (secondary / link) ---------- */
+.btn-secondary {
+  flex: 0 0 auto;
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--gray-200);
+  background: var(--white);
+  color: var(--gray-700);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-secondary:hover {
+  background: var(--gray-100);
+}
+
+.link-btn {
+  border: none;
+  background: transparent;
+  color: var(--blue);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 6px 4px;
+  min-height: 32px;
+}
+
+.link-btn:hover {
+  color: var(--blue-dark);
+  text-decoration: underline;
+}
+
+/* ---------- Summary Cards ---------- */
+.summary-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 24px;
+}
+
+.card {
+  background: var(--gray-100);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+}
+
+.card-remaining {
+  background: var(--blue-tint);
+}
+
+.card-label {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gray-700);
+}
+
+.card-amount {
+  display: block;
+  font-size: 30px;
+  font-weight: 800;
+  color: var(--blue-dark);
+  letter-spacing: -0.5px;
+}
+
+.card-row {
+  display: flex;
+  gap: 10px;
+}
+
+.card-row .card {
+  flex: 1;
+  padding: 16px;
+  border-radius: var(--radius-md);
+}
+
+.card-amount-sm {
+  display: block;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.card-income .card-amount-sm {
+  color: var(--blue-dark);
+}
+
+.card-expense .card-amount-sm {
+  color: var(--red);
+}
+
+/* ---------- Transactions ---------- */
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.section-header h2 {
+  font-size: 16px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.transaction-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.transaction-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 4px;
+  border-bottom: 1px solid var(--gray-100);
+  cursor: pointer;
+  min-height: 44px;
+}
+
+.transaction-item:last-child {
+  border-bottom: none;
+}
+
+.tx-left {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.tx-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--navy);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tx-meta {
+  font-size: 12px;
+  color: var(--gray-500);
+}
+
+.tx-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--gray-100);
+  color: var(--gray-700);
+  font-size: 11px;
+  font-weight: 600;
+  margin-left: 6px;
+}
+
+.tx-amount {
+  font-size: 15px;
+  font-weight: 700;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.tx-amount.income {
+  color: var(--blue-dark);
+}
+
+.tx-amount.expense {
+  color: var(--red);
+}
+
+.tx-pending {
+  opacity: 0.55;
+}
+
+.empty-state {
+  text-align: center;
+  color: var(--gray-500);
+  font-size: 14px;
+  padding: 40px 0;
+}
+
+/* ---------- FAB ---------- */
+/* #app는 이제 고정 높이 + flex 컴럼 구조라 FAB을 #app 프레임 기준으로 고정하면
+   목록이 짧아도 항상 스크롤 영역 밖(카드 우하단)에 떠서 마지막 거래 항목과 격치지 않는다. */
+.fab {
+  position: absolute;
+  right: 20px;
+  bottom: 28px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--blue);
+  color: var(--white);
+  font-size: 28px;
+  line-height: 1;
+  border: none;
+  box-shadow: 0 6px 16px rgba(49, 130, 246, 0.4);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+.fab:hover {
+  background: var(--blue-dark);
+}
+
+/* ---------- Modal ---------- */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(25, 31, 40, 0.45);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 100;
+}
+
+@media (min-width: 768px) {
+  .modal-overlay {
+    align-items: center;
+  }
+}
+
+.modal {
+  background: var(--white);
+  width: 100%;
+  max-width: 480px;
+  max-height: 90vh;
+  overflow-y: auto;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  box-shadow: var(--shadow-modal);
+  padding: 20px 20px 28px;
+}
+
+@media (min-width: 768px) {
+  .modal {
+    border-radius: var(--radius-lg);
+  }
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.modal-header h3 {
+  font-size: 18px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.type-toggle {
+  display: flex;
+  gap: 8px;
+  margin: 12px 0 16px;
+}
+
+.type-btn {
+  flex: 1;
+  min-height: 44px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--gray-200);
+  background: var(--white);
+  color: var(--gray-700);
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.type-btn.active[data-type="expense"] {
+  background: #fff0f1;
+  border-color: var(--red);
+  color: var(--red);
+}
+
+.type-btn.active[data-type="income"] {
+  background: var(--blue-tint);
+  border-color: var(--blue);
+  color: var(--blue-dark);
+}
+
+.field {
+  display: block;
+  margin-bottom: 14px;
+}
+
+.field-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gray-700);
+  margin-bottom: 6px;
+}
+
+.field-label em {
+  font-style: normal;
+  color: var(--gray-500);
+  font-weight: 400;
+}
+
+.field input,
+.field select,
+.field textarea {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--gray-200);
+  background: var(--white);
+  color: var(--navy);
+  font-size: 15px;
+  font-family: inherit;
+}
+
+.field input:focus,
+.field select:focus,
+.field textarea:focus {
+  outline: none;
+  border-color: var(--blue);
+}
+
+.field textarea {
+  min-height: 72px;
+  resize: vertical;
+}
+
+.form-error {
+  color: var(--red);
+  font-size: 13px;
+  margin: -4px 0 12px;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.btn-primary {
+  background: var(--blue);
+  color: var(--white);
+  border: none;
+  min-height: 48px;
+  border-radius: var(--radius-sm);
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.btn-primary:hover {
+  background: var(--blue-dark);
+}
+
+.btn-primary:disabled {
+  background: var(--gray-200);
+  color: var(--gray-500);
+  cursor: not-allowed;
+}
+
+.btn-block {
+  flex: 1;
+  width: 100%;
+}
+
+.btn-danger {
+  background: var(--white);
+  color: var(--red);
+  border: 1px solid var(--red);
+  min-height: 48px;
+  min-width: 80px;
+  border-radius: var(--radius-sm);
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.btn-danger:hover {
+  background: #fff0f1;
+}
+
+/* ---------- Field row (side-by-side) ---------- */
+.field-row {
+  display: flex;
+  gap: 10px;
+}
+
+.field-row .field {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ---------- Settings sections / manage lists ---------- */
+.settings-section {
+  margin-bottom: 28px;
+}
+
+.add-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.add-row input {
+  flex: 1;
+  min-height: 44px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--gray-200);
+  font-size: 15px;
+  font-family: inherit;
+}
+
+.manage-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.manage-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 4px;
+  border-bottom: 1px solid var(--gray-100);
+  min-height: 44px;
+}
+
+.manage-row:last-child {
+  border-bottom: none;
+}
+
+.manage-row-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--navy);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.manage-row-sub {
+  font-size: 12px;
+  color: var(--gray-500);
+  font-weight: 400;
+}
+
+.row-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.hidden-tag {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--gray-100);
+  color: var(--gray-500);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.group-block {
+  margin-bottom: 18px;
+}
+
+.group-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--gray-700);
+  margin: 0 0 4px;
+  padding: 0 4px;
+}
+
+/* ---------- Budget ---------- */
+.budget-overall {
+  margin-bottom: 24px;
+}
+
+.budget-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.budget-meta {
+  margin-top: 12px;
+}
+
+.progress-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--gray-200);
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--blue);
+  border-radius: 999px;
+}
+
+.progress-fill.over-budget {
+  background: var(--red);
+}
+
+.budget-sub {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--gray-700);
+}
+
+.budget-sub.over-budget {
+  color: var(--red);
+  font-weight: 600;
+}
+
+.budget-row {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.budget-row-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.budget-row-amount {
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.budget-row-amount .amount-used {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--navy);
+}
+
+.budget-row-amount .amount-used.over-budget {
+  color: var(--red);
+}
+
+.budget-row-amount .amount-total {
+  font-size: 12px;
+  color: var(--gray-500);
+}
+
+/* ---------- Analytics ---------- */
+.stat-row {
+  padding: 10px 4px;
+  border-bottom: 1px solid var(--gray-100);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.stat-row:last-child {
+  border-bottom: none;
+}
+
+.stat-row-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.stat-row-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--navy);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stat-row-value {
+  font-size: 13px;
+  color: var(--gray-700);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.stat-bar-track {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--gray-100);
+  overflow: hidden;
+}
+
+.stat-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  /* 분석 탭의 막대는 모두 "소비/지출" 비중을 나타내므로 지출과 같은 색(red)을 사용한다. */
+  background: var(--red);
+}
+
+.mom-diff {
+  margin: 8px 0 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--gray-700);
+}
+
+.mom-diff.up {
+  color: var(--red);
+}
+
+.mom-diff.down {
+  color: var(--blue-dark);
+}
+
+.trend-row {
+  padding: 12px 4px;
+  border-bottom: 1px solid var(--gray-100);
+}
+
+.trend-row:last-child {
+  border-bottom: none;
+}
+
+.trend-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.trend-month {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--gray-700);
+}
+
+.trend-remaining {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--blue-dark);
+  white-space: nowrap;
+}
+
+.trend-remaining.over-budget {
+  color: var(--red);
+}
+
+.trend-numbers {
+  font-size: 12px;
+  color: var(--gray-500);
+  margin-bottom: 6px;
+}
+
+/* ---------- Toast ---------- */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 96px;
+  transform: translateX(-50%);
+  background: var(--navy);
+  color: var(--white);
+  padding: 12px 20px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 600;
+  z-index: 200;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
