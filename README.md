@@ -1,22 +1,20 @@
 # 가계부 (Household Budget App)
 
-순수 HTML / CSS / JavaScript로 만든 개인·가족용 월간 가계부 웹 앱입니다. 프레임워크, 빌드 도구, 서버, 로그인 없이 `index.html`을 브라우저로 직접 열기만 하면 바로 사용할 수 있습니다.
+순수 HTML / CSS / JavaScript로 만든 개인·가족용 월간 가계부 웹 앱입니다. 프레임워크, 빌드 도구, 서버 배포 과정 없이 `index.html`을 브라우저로 직접 열기만 하면 바로 사용할 수 있습니다.
 
 ## 실행 방법
 
 1. 이 저장소를 내려받거나 클론합니다.
 2. `index.html` 파일을 더블클릭해서 브라우저(Chrome, Edge 등)로 엽니다.
-3. 별도 설치·서버·회원가입이 필요 없습니다.
-
-> 데이터는 브라우저의 `localStorage`에 저장됩니다. 항상 같은 브라우저로 열어야 이전 데이터가 유지되며, PC와 모바일은 저장소가 서로 공유되지 않습니다.
+3. 인터넷에 연결되어 있어야 거래 데이터를 불러오고 저장할 수 있습니다(아래 "데이터 저장 방식" 참고).
 
 ## 파일 구성
 
 | 파일 | 설명 |
 | --- | --- |
-| `index.html` | 앱의 전체 구조(홈/예산/분석/설정 탭, 거래·예산·반복거래 등록 모달) |
-| `style.css` | 흰 배경 + 블루 포인트의 미니멐한 반응형 디자인 (360px 모바일부터 대응) |
-| `app.js` | 상태 관리, localStorage 저장/로드, 렌더링, 이벤트 처리를 담당하는 순수 JS 로직 |
+| `index.html` | 앱의 전체 구조(홈/예산/분석/설정 탭, 거래·예산·반복거래 등록 모달, 로딩/오류 화면) |
+| `style.css` | 흰 배경 + 블루 포인트의 미니멀한 반응형 디자인 (360px 모바일부터 대응) |
+| `app.js` | 상태 관리, Supabase·localStorage 저장/로드, 렌더링, 이벤트 처리를 담당하는 순수 JS 로직 |
 | `household_budget_app_prd.md` | 최초 작성한 제품 요구사항 문서(PRD) |
 
 ## 주요 기능
@@ -29,15 +27,16 @@
 
 ## 데이터 저장 방식
 
-서버나 데이터베이스 없이 브라우저 `localStorage`만 사용합니다.
+- **거래(수입/지출) 내역**: [Supabase](https://supabase.com) Postgres의 `income_expense_lists` 테이블에 저장됩니다. 로그인 기능은 없으며, 브라우저마다 `crypto.randomUUID()`로 만든 임의의 `owner_key`를 `localStorage`(`household-budget:ownerKey`)에 보관해두고 모든 거래에 함께 저장·조회해서 다른 브라우저의 데이터와 섞이지 않게 합니다.
+- **사용자·카테고리·예산·반복 거래 규칙**: 여전히 브라우저 `localStorage`에 저장됩니다.
+  - `household-budget:members`, `household-budget:categories`, `household-budget:budgets`, `household-budget:recurring`
 
-- `household-budget:transactions` — 거래 내역
-- `household-budget:members` — 사용자(거래 주체) 목록
-- `household-budget:categories` — 카테고리(중분류/소분류) 목록
-- `household-budget:budgets` — 월별 예산
-- `household-budget:recurring` — 반복 거래 규칙
+### ⚠️ 보안/개인정보 관련 중요 안내
+
+이 앱은 로그인이 없고 Supabase `anon`/publishable key가 `app.js` 소스코드에 그대로 포함되어 있습니다(정적 사이트 특성상 불가피합니다). 데이터베이스 RLS는 익명 접근을 허용하도록 열려 있고, 실제 보호는 **브라우저별 `owner_key`를 아는 사람만 그 데이터를 조회·수정할 수 있다는 "추측 불가능성"**에만 의존합니다 — 완전한 보안이 아니라 실수로 인한 노출을 막는 수준입니다. 진짜 로그인 기반 보호가 필요하다면 Supabase Auth와 `auth.uid()` 기반 RLS 정책으로 교체해야 합니다.
 
 ## 알려진 제한사항
 
-- 여러 기기 간 데이터 동기화를 지원하지 않습니다(기기·브라우저별로 독립적으로 저장됨).
-- 브라우저 저장소를 지우면(또는 시크릿 모드 종료 시) 데이터가 사라집니다.
+- 인터넷 연결이 없으면 거래를 불러오거나 저장할 수 없습니다(오류 화면과 "다시 시도" 버튼이 표시됩니다).
+- 여러 기기 간 데이터 동기화는 지원하지 않습니다 — 기기·브라우저마다 `owner_key`가 달라 서로 다른 거래 목록을 봅니다(같은 기기·브라우저에서는 새로고침해도 유지됩니다).
+- 브라우저 저장소(`localStorage`)를 지우면 `owner_key`도 사라져 그동안의 거래 내역에 다시 접근할 수 없게 됩니다.
