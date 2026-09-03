@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#ffffff" />
+    <meta name="description" content="수입과 지출을 기록하고 예산과 반복 거래까지 관리하는 가계부" />
+    <title>가계부</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <header class="app-header">
+        <h1>가계부</h1>
+      </header>
+
+      <section class="month-nav" aria-label="월 선택">
+        <button type="button" id="prevMonth" class="icon-btn" aria-label="이전 달">‹</button>
+        <span id="monthLabel" class="month-label"></span>
+        <button type="button" id="nextMonth" class="icon-btn" aria-label="다음 달">›</button>
+      </section>
+
+      <nav class="tab-bar" aria-label="화면 전환">
+        <button type="button" class="tab-btn active" data-tab="home">홈</button>
+        <button type="button" class="tab-btn" data-tab="budget">예산</button>
+        <button type="button" class="tab-btn" data-tab="analytics">분석</button>
+        <button type="button" class="tab-btn" data-tab="settings">설정</button>
+      </nav>
+
+      <main class="container">
+        <!-- ===== 홈 탭 ===== -->
+        <div id="homeTab">
+          <section class="member-filter" id="memberFilter" aria-label="사용자 필터"></section>
+
+          <section class="summary-cards">
+            <div class="card card-remaining">
+              <p class="card-label">이번 달 남은 돈</p>
+              <strong id="remainingAmount" class="card-amount">0원</strong>
+            </div>
+            <div class="card-row">
+              <div class="card card-income">
+                <p class="card-label">총수입</p>
+                <strong id="totalIncome" class="card-amount-sm">0원</strong>
+              </div>
+              <div class="card card-expense">
+                <p class="card-label">총지출</p>
+                <strong id="totalExpense" class="card-amount-sm">0원</strong>
+              </div>
+            </div>
+          </section>
+
+          <section class="extra-filters" aria-label="상세 필터">
+            <input type="search" id="searchInput" class="search-input" placeholder="거래 내용·메모 검색" maxlength="60" />
+            <div class="filter-row">
+              <select id="typeFilter" aria-label="수입/지출 필터">
+                <option value="all">전체 유형</option>
+                <option value="income">수입</option>
+                <option value="expense">지출</option>
+              </select>
+              <select id="categoryFilter" aria-label="카테고리 필터">
+                <option value="all">전체 카테고리</option>
+              </select>
+              <button type="button" id="resetFilters" class="btn-secondary">초기화</button>
+            </div>
+            <p id="filterSummary" class="filter-summary"></p>
+          </section>
+
+          <section class="transactions">
+            <div class="section-header">
+              <h2>거래 내역</h2>
+            </div>
+            <ul id="transactionList" class="transaction-list"></ul>
+            <p id="emptyState" class="empty-state" hidden>이번 달 등록된 거래가 없어요.</p>
+          </section>
+        </div>
+
+        <!-- ===== 예산 탭 ===== -->
+        <div id="budgetTab" hidden>
+          <section class="card card-remaining budget-overall">
+            <div class="budget-head">
+              <p class="card-label">이번 달 전체 예산</p>
+              <button type="button" id="editOverallBudgetBtn" class="link-btn">설정</button>
+            </div>
+            <strong id="overallBudgetAmount" class="card-amount">미설정</strong>
+            <div class="budget-meta" id="overallBudgetMeta" hidden>
+              <div class="progress-bar"><div class="progress-fill" id="overallProgressFill"></div></div>
+              <p class="budget-sub" id="overallBudgetSub"></p>
+            </div>
+          </section>
+
+          <section class="settings-section">
+            <div class="section-header">
+              <h2>카테고리별 예산</h2>
+              <button type="button" id="addCategoryBudgetBtn" class="btn-secondary">+ 추가</button>
+            </div>
+            <ul id="categoryBudgetList" class="manage-list"></ul>
+            <p id="categoryBudgetEmpty" class="empty-state" hidden>이번 달 설정된 카테고리 예산이 없어요.</p>
+          </section>
+        </div>
+
+        <!-- ===== 분석 탭 ===== -->
+        <div id="analyticsTab" hidden>
+          <section class="settings-section">
+            <div class="section-header"><h2>전월 대비 소비</h2></div>
+            <div class="card card-remaining">
+              <p class="card-label">이번 달 소비 (저축·투자 제외)</p>
+              <strong id="consumptionTotal" class="card-amount">0원</strong>
+              <p class="mom-diff" id="momDiff"></p>
+            </div>
+            <p class="manage-row-sub" id="assetTransferTotal"></p>
+          </section>
+
+          <section class="settings-section">
+            <div class="section-header"><h2>카테고리별 소비 비중</h2></div>
+            <div id="categoryBreakdown"></div>
+            <p id="categoryBreakdownEmpty" class="empty-state" hidden>이번 달 소비 내역이 없어요.</p>
+          </section>
+
+          <section class="settings-section">
+            <div class="section-header"><h2>사용자별 소비 비중</h2></div>
+            <div id="memberBreakdown"></div>
+            <p id="memberBreakdownEmpty" class="empty-state" hidden>이번 달 소비 내역이 없어요.</p>
+          </section>
+
+          <section class="settings-section">
+            <div class="section-header"><h2>고정지출 vs 개인지출</h2></div>
+            <div id="groupComparison"></div>
+          </section>
+
+          <section class="settings-section">
+            <div class="section-header"><h2>최근 6개월 추이</h2></div>
+            <div id="trendList"></div>
+          </section>
+        </div>
+
+        <!-- ===== 설정 탭 ===== -->
+        <div id="settingsTab" hidden>
+          <section class="settings-section">
+            <div class="section-header"><h2>사용자 관리</h2></div>
+            <ul id="memberManageList" class="manage-list"></ul>
+            <div class="add-row">
+              <input type="text" id="newMemberInput" placeholder="새 사용자 이름" maxlength="20" />
+              <button type="button" id="addMemberBtn" class="btn-secondary">추가</button>
+            </div>
+          </section>
+
+          <section class="settings-section">
+            <div class="section-header"><h2>소분류 관리</h2></div>
+            <div id="categoryManageGroups"></div>
+          </section>
+
+          <section class="settings-section">
+            <div class="section-header">
+              <h2>반복 거래</h2>
+              <button type="button" id="addRecurringBtn" class="btn-secondary">+ 등록</button>
+            </div>
+            <ul id="recurringList" class="manage-list"></ul>
+            <p id="recurringEmpty" class="empty-state" hidden>등록된 반복 거래가 없어요.</p>
+          </section>
+        </div>
+      </main>
+
+      <button type="button" id="addFab" class="fab" aria-label="거래 추가">+</button>
+    </div>
+
+    <!-- ===== 거래 추가/수정 모달 ===== -->
+    <div id="modalOverlay" class="modal-overlay" hidden>
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+        <div class="modal-header">
+          <h3 id="modalTitle">거래 추가</h3>
+          <button type="button" id="closeModal" class="icon-btn" aria-label="닫기">✕</button>
+        </div>
+        <form id="transactionForm" novalidate>
+          <input type="hidden" id="editId" value="" />
+
+          <div class="type-toggle" role="group" aria-label="유형 선택">
+            <button type="button" class="type-btn active" data-type="expense">지출</button>
+            <button type="button" class="type-btn" data-type="income">수입</button>
+          </div>
+
+          <label class="field">
+            <span class="field-label">금액</span>
+            <input type="number" id="amountInput" min="1" step="1" inputmode="numeric" placeholder="0" required />
+          </label>
+
+          <label class="field">
+            <span class="field-label">날짜</span>
+            <input type="date" id="dateInput" required />
+          </label>
+
+          <label class="field">
+            <span class="field-label">사용자</span>
+            <select id="memberInput" required></select>
+          </label>
+
+          <label class="field">
+            <span class="field-label">중분류</span>
+            <select id="groupInput" required></select>
+          </label>
+
+          <label class="field">
+            <span class="field-label">소분류</span>
+            <select id="categoryInput" required></select>
+          </label>
+
+          <label class="field">
+            <span class="field-label">내용 <em>(선택)</em></span>
+            <input type="text" id="contentInput" placeholder="예: 점심 식사" maxlength="60" />
+          </label>
+
+          <label class="field">
+            <span class="field-label">메모 <em>(선택)</em></span>
+            <textarea id="memoInput" placeholder="선택 입력" maxlength="200"></textarea>
+          </label>
+
+          <p id="formError" class="form-error" hidden></p>
+
+          <div class="modal-actions">
+            <button type="button" id="deleteBtn" class="btn-danger" hidden>삭제</button>
+            <button type="submit" id="submitBtn" class="btn-primary btn-block">저장</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- ===== 예산 추가/수정 모달 ===== -->
+    <div id="budgetModalOverlay" class="modal-overlay" hidden>
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="budgetModalTitle">
+        <div class="modal-header">
+          <h3 id="budgetModalTitle">예산 추가</h3>
+          <button type="button" id="closeBudgetModal" class="icon-btn" aria-label="닫기">✕</button>
+        </div>
+        <form id="budgetForm" novalidate>
+          <input type="hidden" id="budgetEditId" value="" />
+
+          <label class="field">
+            <span class="field-label">대상</span>
+            <select id="budgetTargetInput">
+              <option value="">전체 예산</option>
+              <optgroup id="budgetCategoryOptions" label="카테고리별"></optgroup>
+            </select>
+          </label>
+
+          <label class="field">
+            <span class="field-label">월 예산 금액</span>
+            <input type="number" id="budgetAmountInput" min="1" step="1" placeholder="0" required />
+          </label>
+
+          <p id="budgetFormError" class="form-error" hidden></p>
+
+          <div class="modal-actions">
+            <button type="button" id="budgetDeleteBtn" class="btn-danger" hidden>삭제</button>
+            <button type="submit" class="btn-primary btn-block">저장</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- ===== 반복 거래 등록 모달 ===== -->
+    <div id="recurringModalOverlay" class="modal-overlay" hidden>
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="recurringModalTitle">
+        <div class="modal-header">
+          <h3 id="recurringModalTitle">반복 거래 등록</h3>
+          <button type="button" id="closeRecurringModal" class="icon-btn" aria-label="닫기">✕</button>
+        </div>
+        <form id="recurringForm" novalidate>
+          <div class="type-toggle" role="group" aria-label="유형 선택">
+            <button type="button" class="type-btn active" data-type="expense">지출</button>
+            <button type="button" class="type-btn" data-type="income">수입</button>
+          </div>
+
+          <label class="field">
+            <span class="field-label">금액</span>
+            <input type="number" id="recurringAmountInput" min="1" step="1" placeholder="0" required />
+          </label>
+
+          <div class="field-row">
+            <label class="field">
+              <span class="field-label">시작월</span>
+              <input type="month" id="recurringStartInput" required />
+            </label>
+            <label class="field">
+              <span class="field-label">종료월</span>
+              <input type="month" id="recurringEndInput" required />
+            </label>
+          </div>
+
+          <label class="field">
+            <span class="field-label">매월 며칠</span>
+            <input type="number" id="recurringDayInput" min="1" max="31" step="1" value="1" required />
+          </label>
+
+          <label class="field">
+            <span class="field-label">사용자</span>
+            <select id="recurringMemberInput" required></select>
+          </label>
+
+          <label class="field">
+            <span class="field-label">중분류</span>
+            <select id="recurringGroupInput" required></select>
+          </label>
+
+          <label class="field">
+            <span class="field-label">소분류</span>
+            <select id="recurringCategoryInput" required></select>
+          </label>
+
+          <label class="field">
+            <span class="field-label">내용 <em>(선택)</em></span>
+            <input type="text" id="recurringContentInput" placeholder="예: 월세" maxlength="60" />
+          </label>
+
+          <label class="field">
+            <span class="field-label">메모 <em>(선택)</em></span>
+            <textarea id="recurringMemoInput" placeholder="선택 입력" maxlength="200"></textarea>
+          </label>
+
+          <p id="recurringFormError" class="form-error" hidden></p>
+
+          <button type="submit" id="recurringSubmitBtn" class="btn-primary btn-block">등록하고 자동 생성</button>
+        </form>
+      </div>
+    </div>
+
+    <div id="toast" class="toast" hidden></div>
+
+    <script src="app.js"></script>
+  </body>
+</html>
