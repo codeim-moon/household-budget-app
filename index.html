@@ -7,9 +7,18 @@
     <meta name="description" content="수입과 지출을 기록하고 예산과 반복 거래까지 관리하는 가계부" />
     <title>가계부</title>
     <link rel="stylesheet" href="style.css" />
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   </head>
   <body>
-    <div id="app">
+    <div id="loadingOverlay" class="loading-overlay">
+      <p>가계부를 불러오는 중이에요…</p>
+    </div>
+    <div id="errorOverlay" class="loading-overlay" hidden>
+      <p>데이터를 불러오지 못했어요. 인터넷 연결을 확인해 주세요.</p>
+      <button type="button" id="retryLoadBtn" class="btn-primary">다시 시도</button>
+    </div>
+
+    <div id="app" hidden>
       <header class="app-header">
         <h1>가계부</h1>
       </header>
